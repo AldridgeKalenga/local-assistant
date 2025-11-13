@@ -1,0 +1,24 @@
+# Core dependencies
+ollama>=0.1.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Google Calendar API
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-api-python-client>=2.0.0
+
+# Date/time handling
+python-dateutil>=2.8.0
+
+# Text-to-Speech (optional - works offline)
+pyttsx3>=2.90
+
+# Speech-to-Text (optional)
+SpeechRecognition>=3.10.0
+pyaudio>=0.2.11
+
+# Offline STT with Vosk
+vosk>=0.3.45
+sounddevice>=0.4.6
+
