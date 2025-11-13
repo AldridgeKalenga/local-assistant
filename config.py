@@ -1,12 +1,8 @@
 # config.py
 import os
-import platform
 
 # -------- Core assistant identity / model --------
 ASSISTANT_NAME = "Assistant"
-
-# default LLM for chat_turn()
-DEFAULT_MODEL = "llama3.2:1b"
 
 # path where we store user profiles (places, TTS prefs, permissions, etc.)
 PROFILES_PATH = "profiles.json"
@@ -14,11 +10,8 @@ PROFILES_PATH = "profiles.json"
 # local timezone string used for calendar queries and natural language time parsing
 LOCAL_TZ_NAME = "America/New_York"
 
-CURRENT_OS = platform.system()
-
 # -------- Google Calendar config --------
 GCAL_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
-GCAL_TOKEN_PATH = "token.json"           # legacy fallback, but we now prefer token_<identity>.json
 GCAL_CREDENTIALS_PATH = "credentials.json"  # fallback creds path
 
 # -------- TTS defaults --------
@@ -34,15 +27,6 @@ STRICT_AUTH = os.getenv("STRICT_AUTH", "1") == "1"
 
 # We try auto face recognition ON START before dropping into the REPL.
 AUTO_RECOG_ON_START = os.getenv("FACE_AUTORECOG", "1") == "1"
-
-# Voice mode sanity knobs
-AUTO_LISTEN_AT_START = os.getenv("AUTO_LISTEN_AT_START", "1") == "1"
-
-# background watching (optional / not heavily used yet)
-AUTO_WATCH = os.getenv("FACE_WATCH", "0") == "1"
-WATCH_INTERVAL_SEC = int(os.getenv("FACE_WATCH_INTERVAL", "20"))
-WATCH_VOTES = int(os.getenv("FACE_WATCH_VOTES", "7"))
-WATCH_TIMEOUT_FRAMES = int(os.getenv("FACE_WATCH_FRAMES", "120"))
 
 # -------- Voice mode knobs --------
 VOICE_MODE_DEFAULT = os.getenv("VOICE_MODE", "1") == "1"        # start in hands-free mode if unlocked
@@ -144,3 +128,4 @@ Commands:
 /exit
     - Quit the assistant.
 """.strip()
++

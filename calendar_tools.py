@@ -8,7 +8,6 @@ from dateutil import tz, parser as dtparser
 
 from config import (
     GCAL_SCOPES,
-    GCAL_TOKEN_PATH,
     GCAL_CREDENTIALS_PATH,
     LOCAL_TZ_NAME,
 )
