@@ -34,6 +34,13 @@ VOICE_PHRASE_LIMIT = int(os.getenv("VOICE_PHRASE_LIMIT", "30")) # max seconds to
 VOICE_END_SILENCE = float(os.getenv("VOICE_END_SILENCE", "2.0"))# silence that ends the utterance
 VOICE_MIN_LISTEN = float(os.getenv("VOICE_MIN_LISTEN", "0.8"))  # always listen at least this long
 
+# -------- STT backend selection --------
+# STT_BACKEND:
+#   "auto" = automatic (use Vosk if available, else Google)
+#   "vosk" = force Vosk (offline, requires VOSK_MODEL)
+#   "google" = force Google Web Speech API (online)
+STT_BACKEND = os.getenv("STT_BACKEND", "auto").lower()
+
 # -------- Face quality / security knobs --------
 FACE_MIN_SIZE    = int(os.getenv("FACE_MIN_SIZE", "80"))        # px width/height min
 FACE_BLUR_THRESH = float(os.getenv("FACE_BLUR_THRESH", "100"))  # Laplacian variance lower bound
@@ -128,4 +135,3 @@ Commands:
 /exit
     - Quit the assistant.
 """.strip()
-+

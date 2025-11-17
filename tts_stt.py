@@ -11,6 +11,7 @@ from config import (
     VOICE_END_SILENCE,
     VOICE_MIN_LISTEN,
     VOICE_PHRASE_LIMIT,
+    STT_BACKEND,
 )
 
 
@@ -141,6 +142,7 @@ class STT:
         self.vosk_model_path = os.getenv("VOSK_MODEL")
         self.has_sr = self._check_sr()
         self.has_vosk = self._check_vosk()
+        self.preferred_backend = STT_BACKEND  # "auto", "vosk", or "google"
         self.available = self.has_sr or (self.has_vosk and self.vosk_model_path)
 
     def _check_sr(self):
@@ -172,7 +174,11 @@ class STT:
         or None if we got nothing.
         """
         # Offline Vosk path
-        if self.has_vosk and self.vosk_model_path:
+        use_vosk = (
+            self.has_vosk and self.vosk_model_path and
+            (self.preferred_backend in ("auto", "vosk"))
+        )
+        if use_vosk:
             try:
                 import vosk, sounddevice as sd, json as _json, time as _time
                 model = vosk.Model(self.vosk_model_path)
@@ -235,7 +241,11 @@ class STT:
                 print(f"(Vosk STT error: {e})")
 
         # SpeechRecognition fallback (uses Google Web Speech API)
-        if self.has_sr:
+        use_google = (
+            self.has_sr and
+            (self.preferred_backend in ("auto", "google"))
+        )
+        if use_google:
             try:
                 import speech_recognition as sr
                 r = sr.Recognizer()
