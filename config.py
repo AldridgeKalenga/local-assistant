@@ -47,6 +47,7 @@ VOICE_MODE_DEFAULT = os.getenv("VOICE_MODE", "1") == "1"        # start in hands
 VOICE_PHRASE_LIMIT = int(os.getenv("VOICE_PHRASE_LIMIT", "30")) # max seconds to record per utterance
 VOICE_END_SILENCE = float(os.getenv("VOICE_END_SILENCE", "2.0"))# silence that ends the utterance
 VOICE_MIN_LISTEN = float(os.getenv("VOICE_MIN_LISTEN", "0.8"))  # always listen at least this long
+VOICE_THOUGHT_PADDING = float(os.getenv("VOICE_THOUGHT_PADDING", "1.2"))  # extra pause cushion before auto-stop
 
 # -------- STT backend selection --------
 # STT_BACKEND:

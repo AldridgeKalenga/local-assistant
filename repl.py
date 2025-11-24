@@ -12,6 +12,7 @@ from config import (
     VOICE_END_SILENCE,
     VOICE_MIN_LISTEN,
     HELP_TEXT,
+    VOICE_THOUGHT_PADDING,
 )
 
 from personas import PERSONAS
@@ -64,6 +65,136 @@ def print_header(identity: str):
     print("----------------------------------------")
 
 
+_NATO_MAP = {
+    "alpha": "A", "bravo": "B", "charlie": "C", "delta": "D", "echo": "E", "foxtrot": "F",
+    "golf": "G", "hotel": "H", "india": "I", "juliett": "J", "kilo": "K", "lima": "L",
+    "mike": "M", "november": "N", "oscar": "O", "papa": "P", "quebec": "Q", "romeo": "R",
+    "sierra": "S", "tango": "T", "uniform": "U", "victor": "V", "whiskey": "W", "x-ray": "X",
+    "xray": "X", "yankee": "Y", "zulu": "Z"
+}
+
+_PUNCT_MAP = {
+    "apostrophe": "'",
+    "quote": "'",
+    "single quote": "'",
+    "dash": "-",
+    "hyphen": "-",
+    "space": " ",
+    "underscore": "_",
+    "dot": ".",
+    "period": ".",
+}
+
+
+def _spell_token_to_char(token: str):
+    raw = token.strip()
+    low = raw.lower()
+    if not low:
+        return None
+    if low in ("done", "finish"):
+        return None
+    if low.startswith("letter "):
+        remainder = low.split("letter ", 1)[1].strip()
+        if remainder.startswith("capital "):
+            char = remainder.split("capital ", 1)[1].strip()
+            return char[:1].upper() if char else None
+        return remainder[:1] if remainder else None
+    if low.startswith("capital "):
+        char = low.split("capital ", 1)[1].strip()
+        return char[:1].upper() if char else None
+    if low in _NATO_MAP:
+        return _NATO_MAP[low]
+    if low in _PUNCT_MAP:
+        return _PUNCT_MAP[low]
+    if len(raw) == 1:
+        return raw
+    if len(low) == 1:
+        return low
+    return None
+
+
+def _ask_input(prompt, use_voice=False):
+    if not use_voice:
+        return input(prompt)
+    print(prompt, flush=True)
+    spoken, _ = do_voice_listen(False)
+    return spoken.strip() if spoken else ""
+
+
+def _normalize_voice_command(text: str):
+    if not text:
+        return text
+    trimmed = text.strip()
+    if not trimmed:
+        return trimmed
+    if trimmed.startswith("/"):
+        return trimmed
+    low = trimmed.lower()
+    if low in ("recognize", "unlock", "login"):
+        return "/recognize"
+    for base in ("setup profile", "set up profile"):
+        if low.startswith(base):
+            remainder = trimmed[len(base):].strip()
+            return f"/setup_profile {remainder}" if remainder else "/setup_profile"
+    return trimmed
+
+
+def spell_name_interactive(use_voice=False):
+    print("\n(Spell mode: say things like 'letter A', 'apostrophe', 'space', 'backspace', 'done')")
+    buffer = []
+    while True:
+        entry = _ask_input("(Spell) ", use_voice).strip()
+        low = entry.lower()
+        if not entry:
+            continue
+        if low in ("done", "finish", "/done", "accept", "ok", "confirm"):
+            candidate = "".join(buffer).strip()
+            if not candidate:
+                print("(No letters captured.)")
+                return None
+            print(f"(Captured name: {candidate})")
+            return candidate
+        if low in ("backspace", "delete", "undo"):
+            if buffer:
+                buffer.pop()
+            print(f"(Now: {''.join(buffer) or '[empty]'})")
+            continue
+        if low in ("clear", "reset"):
+            buffer.clear()
+            print("(Cleared name)")
+            continue
+        char = _spell_token_to_char(entry)
+        if char:
+            buffer.append(char)
+            print(f"(Now: {''.join(buffer)})")
+        else:
+            print("Say 'letter A', a NATO word like 'Alpha', or punctuation like 'apostrophe'.")
+
+
+def prompt_for_verified_name(initial_guess: str, use_voice=False):
+    current = (initial_guess or "").strip()
+    while True:
+        print("\n--- Name Confirmation ---")
+        print(f"Candidate: {current or '[none]'}")
+        print("Press Enter to accept, type a new name, or type '/spell' to spell it.")
+        print("Type '/cancel' to abort.")
+        resp = _ask_input("(Name) ", use_voice).strip()
+        low = resp.lower()
+        if (not resp and current) or low in ("accept", "ok", "okay", "confirm", "yes", "alright"):
+            return current
+        if low == "/cancel":
+            return None
+        if low in ("/spell", "spell"):
+            spelled = spell_name_interactive(use_voice=use_voice)
+            if spelled:
+                current = spelled
+            continue
+        if resp:
+            current = resp
+        else:
+            print("(Please provide a name or '/cancel'.)")
+
+
 def do_voice_listen(voice_mode_active):
     """
     Listen for voice input through STT.
@@ -72,14 +203,14 @@ def do_voice_listen(voice_mode_active):
     if not stt.available:
         print("(STT unavailable)")
         return None, voice_mode_active
-
-    spoken = stt.listen_once()
+    spoken = stt.listen_once(allow_wake_prefix=True)
     if not spoken:
         if voice_mode_active:
             print("(Heard nothing, listening again...)")
             return None, True
         return None, voice_mode_active
 
+    spoken = _normalize_voice_command(spoken)
     print(f"(You said) {spoken}")
     low_spoken = spoken.lower().strip()
     exit_phrases = ["exit", "quit", "goodbye", "bye", "stop", "pause"]
@@ -284,13 +415,17 @@ def run_repl():
 
         if low.startswith("/setup_profile"):
             parts = user.split(maxsplit=1)
-            name = parts[1].strip() if len(parts) > 1 else ""
-            if not name:
+            tentative = parts[1].strip() if len(parts) > 1 else ""
+            if not tentative:
                 print("Usage: /setup_profile <Name>")
                 continue
-            ok = capture_profile(name)
+            verified_name = prompt_for_verified_name(tentative, use_voice=voice_mode)
+            if not verified_name:
+                print("(Setup cancelled.)")
+                continue
+            ok = capture_profile(verified_name)
             if ok:
-                print(f"Enrolled '{name}'. Say `/recognize` to unlock.")
+                print(f"Enrolled '{verified_name}'. Say `/recognize` to unlock.")
             else:
                 print("Enrollment failed or no samples captured.")
             continue
@@ -450,7 +585,7 @@ def run_repl():
                 print(f"(Voice mode: {status})")
                 if voice_mode:
                     print(f"  - Phrase limit: {VOICE_PHRASE_LIMIT}s")
-                    print(f"  - End silence: {VOICE_END_SILENCE}s")
+                    print(f"  - End silence: {VOICE_END_SILENCE}s (+{VOICE_THOUGHT_PADDING}s thought padding)")
                     print(f"  - Min listen: {VOICE_MIN_LISTEN}s")
             else:
                 print("Usage: /voice on|off|status")

@@ -12,6 +12,7 @@ from config import (
     VOICE_MIN_LISTEN,
     VOICE_PHRASE_LIMIT,
     STT_BACKEND,
+    VOICE_THOUGHT_PADDING,
 )
 
 
@@ -167,7 +168,8 @@ class STT:
         min_listen=VOICE_MIN_LISTEN,
         phrase_time_limit=VOICE_PHRASE_LIMIT,
         samplerate=16000,
-        blocksize=8000
+        blocksize=8000,
+        allow_wake_prefix=False
     ):
         """
         Record one utterance, return the recognized text (string),
@@ -216,6 +218,9 @@ class STT:
                                 res = _json.loads(rec.Result())
                                 text = (res.get("text") or "").strip()
                                 if text:
+                                    # remove optional wake prefix "slash "
+                                    if allow_wake_prefix and text.startswith("slash "):
+                                        text = text[6:].lstrip()
                                     return text
                                 last_voice_t = now
                             else:
@@ -227,8 +232,10 @@ class STT:
                         elapsed = now - start_t
                         since_voice = now - last_voice_t
 
-                        # silence after we've heard something
-                        if elapsed >= min_listen and since_voice >= end_silence:
+                        dynamic_end = end_silence + VOICE_THOUGHT_PADDING
+
+                        # silence after we've heard something (with thought padding)
+                        if elapsed >= min_listen and since_voice >= dynamic_end:
                             final = _json.loads(rec.FinalResult()).get("text", "").strip()
                             return final or (None if not heard_anything else "")
 
@@ -256,7 +263,12 @@ class STT:
 
                 try:
                     text = r.recognize_google(audio)
-                    return text.strip() if text else None
+                    if text:
+                        text = text.strip()
+                        if allow_wake_prefix and text.lower().startswith("slash "):
+                            text = text[6:].lstrip()
+                        return text
+                    return None
                 except sr.UnknownValueError:
                     return None
                 except sr.RequestError as e:
