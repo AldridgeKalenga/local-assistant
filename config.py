@@ -11,8 +11,22 @@ PROFILES_PATH = "profiles.json"
 LOCAL_TZ_NAME = "America/New_York"
 
 # -------- Google Calendar config --------
-GCAL_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+GCAL_SCOPES = [
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/contacts.readonly"  # For People API (contact addresses)
+]
 GCAL_CREDENTIALS_PATH = "credentials.json"  # fallback creds path
+
+# -------- Google Contacts / People API config --------
+# Map identity names to their Google Contact names (optional)
+# If not set, will use the identity name itself to find the contact
+# Format: "identity_name": "Google Contact Name"
+# Example: {"Aldridge": "Aldridge Kalenga", "Professor": "Dr. Smith"}
+CONTACT_NAME_MAP = {
+    # Add mappings here if your Google Contact name differs from identity
+    # "Aldridge": "Aldridge Kalenga",  # Uncomment and modify as needed
+    # "Professor": "Professor Smith",  # Uncomment and modify as needed
+}
 
 # -------- TTS defaults --------
 TTS_ENABLED_DEFAULT = True
@@ -105,6 +119,12 @@ Commands:
 
 /places
     - List all saved named destinations for the current unlocked profile.
+    - Run /sync_contacts to pull addresses from Google Contacts automatically.
+
+/sync_contacts
+    - Sync addresses from your Google Contacts to saved places.
+    - Requires addresses to be set up in your Google account.
+    - Alternative: use /setplace to add addresses manually.
 
 /agenda
     - Read your next 10 upcoming calendar events. Only if this profile

@@ -44,6 +44,12 @@ from calendar_tools import (
     handle_calendar_text,
 )
 
+from people_tools import (
+    PEOPLE_AVAILABLE,
+    people_sync_to_places,
+    people_get_contact_addresses,
+)
+
 from face_auth import (
     HAS_CV2,
     recognize_quick,
@@ -569,9 +575,31 @@ def run_repl():
             places = profiles.get(identity, {}).get("places", {})
             if not places:
                 print("(No saved places.)")
+                print("\n💡 You can add places in two ways:")
+                print("   1. Sync from Google Contacts: /sync_contacts")
+                print("      (Make sure addresses are saved in your Google Contacts)")
+                print("   2. Add manually: /setplace <name> = <address>")
             else:
                 for k, v in places.items():
                     print(f"- {k}: {v}")
+            continue
+
+        # Sync contacts from Google People API
+        if low == "/sync_contacts":
+            if locked_like:
+                print("(Locked/Guest cannot sync contacts.)")
+                continue
+            if not PEOPLE_AVAILABLE:
+                print("(Google People API not available. Install google-api-python-client.)")
+                continue
+            print("(Syncing addresses from Google Contacts...)")
+            synced, msg = people_sync_to_places(identity=identity, profiles=profiles)
+            print(f"({msg})")
+            if synced == 0:
+                print("\n Tip: To sync addresses automatically:")
+                print("   1. Add addresses to your contacts in Google Contacts (contacts.google.com)")
+                print("   2. Run /sync_contacts again")
+                print("   OR use /setplace to add addresses manually")
             continue
 
         # STT one-shot mic capture
@@ -610,9 +638,29 @@ def run_repl():
                 flags=re.IGNORECASE
             ).strip().lower()
             dest = profiles.get(identity, {}).get("places", {}).get(place_key)
+            
+            # If not found, try searching Google Contacts
+            if not dest and PEOPLE_AVAILABLE:
+                contacts = people_get_contact_addresses(identity=identity)
+                # Try to find matching contact
+                for contact_name, address_list in contacts.items():
+                    contact_key = contact_name.lower().replace(' ', '_').replace("'", "").replace(".", "")
+                    if place_key in contact_key or contact_key in place_key:
+                        dest = address_list[0][0]  # Use first address (address string, not tuple)
+                        # Cache it for next time
+                        ensure_identity_struct(profiles, identity)
+                        profiles[identity]["places"][place_key] = dest
+                        save_profiles(profiles)
+                        print(f"(Found '{contact_name}' in Google Contacts, cached for next time.)")
+                        break
+            
             if not dest:
-                print(f"(I don't have '{place_key}' saved for {identity}. Use `/setplace {place_key} = <address or lat,lon>`.)")
+                print(f"(I don't have '{place_key}' saved for {identity}.)")
+                print(" Options:")
+                print("   - Run /sync_contacts to pull from Google Contacts")
+                print("   - Use /setplace to add manually")
                 continue
+            
             url = open_maps_destination(dest)
             print(f"Opening navigation to '{place_key}' → {dest}\nURL: {url}")
             continue

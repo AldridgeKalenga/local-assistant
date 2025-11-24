@@ -18,18 +18,21 @@ def open_maps_destination(value: str):
     Opens default maps (Apple Maps on macOS, otherwise Google Maps).
     Returns the URL we attempted to open.
     """
-    is_ll, lat, lon = _is_latlon(value)
+    # Normalize address: replace newlines with spaces and clean up whitespace
+    normalized = ' '.join(value.split())
+    
+    is_ll, lat, lon = _is_latlon(normalized)
     if sys.platform == "darwin":
         url = (
             f"http://maps.apple.com/?daddr={lat},{lon}"
             if is_ll else
-            f"http://maps.apple.com/?daddr={urllib.parse.quote(value)}"
+            f"http://maps.apple.com/?daddr={urllib.parse.quote(normalized)}"
         )
     else:
         url = (
             f"https://www.google.com/maps/dir/?api=1&destination={lat},{lon}"
             if is_ll else
-            f"https://www.google.com/maps/dir/?api=1&destination={urllib.parse.quote(value)}"
+            f"https://www.google.com/maps/dir/?api=1&destination={urllib.parse.quote(normalized)}"
         )
     webbrowser.open(url)
     return url
