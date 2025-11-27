@@ -60,7 +60,10 @@ STT_BACKEND = os.getenv("STT_BACKEND", "auto").lower()
 FACE_MIN_SIZE    = int(os.getenv("FACE_MIN_SIZE", "80"))        # px width/height min
 FACE_BLUR_THRESH = float(os.getenv("FACE_BLUR_THRESH", "100"))  # Laplacian variance lower bound
 FACE_MAX_BLUR    = float(os.getenv("FACE_MAX_BLUR", "600"))     # Laplacian variance upper bound (too bright)
-FACE_DIST_THRESH = float(os.getenv("FACE_DIST_THRESH", "2600")) # max kNN embedding distance allowed
+FACE_DIST_THRESH = float(os.getenv("FACE_DIST_THRESH", "2600")) # max kNN embedding distance allowed (legacy, not used with LBPH)
+FACE_LBPH_CONFIDENCE = float(os.getenv("FACE_LBPH_CONFIDENCE", "70"))  # LBPH confidence threshold (lower = more lenient, typical: 50-100)
+FACE_RECOGNITION_TOLERANCE = float(os.getenv("FACE_RECOGNITION_TOLERANCE", "0.6"))  # face_recognition tolerance (lower = more strict, typical: 0.4-0.7)
+FACE_CAMERA_AUTO = os.getenv("FACE_CAMERA_AUTO", "0") == "1"  # Use auto exposure/white balance during recognition (1=auto, 0=fixed)
 
 # -------- Camera selection knobs --------
 # CAMERA_INDEX:

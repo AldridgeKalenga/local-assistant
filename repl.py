@@ -236,7 +236,7 @@ def attempt_auto_identity(profiles):
     """
     who = None
     if HAS_CV2:
-        who = recognize_quick(timeout_frames=250, need_votes=5, k=5)
+        who = recognize_quick(timeout_frames=250, need_votes=5)
 
     if STRICT_AUTH:
         if who and who in PERSONAS:
@@ -352,7 +352,7 @@ def run_repl():
                 print("(Camera / OpenCV not available.)")
                 continue
 
-            who = recognize_quick(timeout_frames=250, need_votes=5, k=5)
+            who = recognize_quick(timeout_frames=250, need_votes=5)
 
             # Case 0: we didn't confidently match any face at all
             if not who:
