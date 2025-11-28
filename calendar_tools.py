@@ -318,14 +318,24 @@ def handle_calendar_text(user_text, tzname=LOCAL_TZ_NAME, identity="Aldridge"):
     ]
     looks_like_calendar = any(t in low for t in triggers)
 
+    # Check for date words, but only treat as calendar if they appear with calendar context
+    # Don't trigger on casual mentions of "today" like "how are you doing today"
+    date_words = ["today","tomorrow"] + list(_WEEKDAYS.keys())
+    has_date_word = any(w in low for w in date_words)
+    
     if not looks_like_calendar:
-        if not any(w in low for w in ["today","tomorrow"] + list(_WEEKDAYS.keys())):
+        # No calendar triggers found
+        if not has_date_word:
+            # No date words either, try parsing as date
             try:
                 _ = dtparser.parse(user_text, fuzzy=True)
             except Exception:
                 return False, None
         else:
-            looks_like_calendar = True
+            # Has date word but NO calendar triggers - this is likely NOT a calendar query
+            # (e.g., "how are you doing today" should not trigger calendar)
+            # Only return False - don't treat as calendar query
+            return False, None
 
     local = tz.gettz(tzname)
     base_today = (
