@@ -256,10 +256,18 @@ class STT:
             try:
                 import speech_recognition as sr
                 r = sr.Recognizer()
+                # Align pause/min-listen timings with our config knobs so we don't cut users off.
+                r.pause_threshold = max(0.1, VOICE_END_SILENCE)
+                r.non_speaking_duration = max(0.1, VOICE_END_SILENCE)
+                r.phrase_threshold = max(0.1, VOICE_MIN_LISTEN)
                 with sr.Microphone() as source:
                     r.adjust_for_ambient_noise(source, duration=0.5)
                     print("(Listening… speak now)")
-                    audio = r.listen(source, timeout=10, phrase_time_limit=phrase_time_limit)
+                    audio = r.listen(
+                        source,
+                        timeout=None,
+                        phrase_time_limit=phrase_time_limit
+                    )
 
                 try:
                     text = r.recognize_google(audio)

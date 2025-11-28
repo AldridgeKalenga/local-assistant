@@ -28,6 +28,7 @@ from llm import (
     set_model,
     seed_chat_history,
     chat_turn,
+    build_grounding_context,
 )
 
 from tts_stt import (
@@ -56,6 +57,7 @@ from face_auth import (
     recognize_quick,
     capture_profile,
 )
+from profile_facts import answer_profile_fact
 
 # ---------- helpers ----------
 
@@ -193,6 +195,22 @@ def prompt_for_verified_name(initial_guess: str, use_voice=False):
             current = resp
         else:
             print("(Please provide a name or '/cancel'.)")
+
+
+def _maybe_handle_calendar_query(user_text, identity, locked_like, profiles, *, tts_enabled, tts_voice_index, tts_rate):
+    """
+    Try to handle natural-language calendar questions before hitting the LLM.
+    Returns True if the query was handled.
+    """
+    if locked_like:
+        return False
+    if not has_calendar_permission(identity, profiles):
+        return False
+
+    handled, tts_summary = handle_calendar_text(user_text, tzname=LOCAL_TZ_NAME, identity=identity)
+    if handled and tts_enabled and tts_summary:
+        tts.speak(tts_summary, True, tts_voice_index, tts_rate)
+    return handled
 
 
 def do_voice_listen(voice_mode_active):
@@ -749,12 +767,11 @@ def run_repl():
             low = user.lower()
 
             # After /mic capture, try calendar intent if allowed
-            if (not locked_like) and has_calendar_permission(identity, profiles):
-                handled, tts_summary = handle_calendar_text(user, tzname=LOCAL_TZ_NAME, identity=identity)
-                if handled:
-                    if tts_enabled and tts_summary:
-                        tts.speak(tts_summary, True, tts_voice_index, tts_rate)
-                    continue
+            if _maybe_handle_calendar_query(user, identity, locked_like, profiles,
+                                             tts_enabled=tts_enabled,
+                                             tts_voice_index=tts_voice_index,
+                                             tts_rate=tts_rate):
+                continue
 
         # Natural-language nav ("take me to work")
         nav_match = re.search(
@@ -800,9 +817,29 @@ def run_repl():
             print(f"Opening navigation to '{place_key}' → {dest}\nURL: {url}")
             continue
 
+        # ---------- Persona fact intent (home/work/etc.) ----------
+        if not locked_like and identity in profiles:
+            fact_answer = answer_profile_fact(identity, user, profiles)
+            if fact_answer:
+                history.append({"role": "user", "content": user})
+                history.append({"role": "assistant", "content": fact_answer})
+                print(f"\n{ASSISTANT_NAME}: {fact_answer}\n")
+                if tts_enabled:
+                    to_say = fact_answer if len(fact_answer) <= 600 else fact_answer[:600] + " ..."
+                    tts.speak(to_say, True, tts_voice_index, tts_rate)
+                continue
+
+        # ---------- Calendar intent ----------
+        if _maybe_handle_calendar_query(user, identity, locked_like, profiles,
+                                         tts_enabled=tts_enabled,
+                                         tts_voice_index=tts_voice_index,
+                                         tts_rate=tts_rate):
+            continue
+
         # ---------- Chat fallback (LLM) ----------
         try:
-            assistant_text = chat_turn(history, user, identity)
+            context_blob = build_grounding_context(identity, profiles)
+            assistant_text = chat_turn(history, user, identity, context=context_blob)
         except Exception as e:
             print(f"(LLM error: {e})")
             continue

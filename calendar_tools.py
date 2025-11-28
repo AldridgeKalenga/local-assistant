@@ -314,14 +314,18 @@ def handle_calendar_text(user_text, tzname=LOCAL_TZ_NAME, identity="Aldridge"):
     triggers = [
         "what do i have","what's on","whats on","what's happening","whats happening",
         "happening","events","schedule","anything on","busy on","free","available",
-        "agenda","calendar"
+        "agenda","calendar","my tasks","upcoming"
     ]
-    if not any(t in low for t in triggers):
+    looks_like_calendar = any(t in low for t in triggers)
+
+    if not looks_like_calendar:
         if not any(w in low for w in ["today","tomorrow"] + list(_WEEKDAYS.keys())):
             try:
                 _ = dtparser.parse(user_text, fuzzy=True)
             except Exception:
                 return False, None
+        else:
+            looks_like_calendar = True
 
     local = tz.gettz(tzname)
     base_today = (
@@ -348,6 +352,9 @@ def handle_calendar_text(user_text, tzname=LOCAL_TZ_NAME, identity="Aldridge"):
 
     # Case 2: "what's on Friday / today / Nov 2"
     day_start, day_end = _parse_day_phrase(user_text, tzname=tzname)
+    if not day_start and looks_like_calendar:
+        day_start = base_today
+        day_end = day_start + datetime.timedelta(days=1)
     if not day_start:
         try:
             now = datetime.datetime.now(local)

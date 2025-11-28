@@ -7,11 +7,14 @@
 
 import ollama
 from personas import PERSONAS
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from config import LOCAL_TZ_NAME
 
 # Keep the model name in a mutable dict so other files can "change" it
 # without needing to declare global everywhere.
 MODEL_ref = {
-    "model": "llama3.2:1b"
+    "model": "llama3.2:3b"
 }
 
 
@@ -60,7 +63,49 @@ def seed_chat_history(identity: str):
     ]
 
 
-def chat_turn(history, user_text: str, identity: str):
+def build_grounding_context(identity: str, profiles: dict | None) -> str | None:
+    """
+    Build a grounding blob that lists known structured facts (places, permissions, etc.)
+    so the model can answer questions like "what is my home" without guessing.
+    """
+    tz = ZoneInfo(LOCAL_TZ_NAME)
+    now_local = datetime.now(tz).strftime("%A %b %d %Y, %I:%M %p")
+    profile = profiles.get(identity, {}) if profiles and identity in profiles else {}
+    lines = [
+        "CRITICAL RULES - You must follow these strictly:",
+        "1. Ground every factual answer ONLY in the profile data below. If data is missing, say 'I don't know' and suggest commands like /setplace or /agenda.",
+        "2. DO NOT invent meetings, tasks, locations, contacts, schedules, or calendar events.",
+        "3. DO NOT invent personal activities, daily routines, or recent events (like 'just got back from breakfast' or 'we have a meeting').",
+        "4. DO NOT make up calendar details. If asked about schedule, use /agenda command or say you don't have that information.",
+        "5. You are a personal assistant. For greeting requests, respond warmly and naturally as if speaking to an audience, but don't claim to actually send messages or sync with devices.",
+        "6. If asked about capabilities you don't have (like live location/GPS, actual broadcasting to other devices), politely explain your limitations.",
+        "7. Never claim features that don't exist. Stay within your actual capabilities.",
+        f"Current authenticated user: {identity}.",
+        f"Current local time ({LOCAL_TZ_NAME}): {now_local}."
+    ]
+
+    places = profile.get("places", {})
+    if places:
+        lines.append("Saved places:")
+        for key, addr in places.items():
+            lines.append(f"- {key}: {addr}")
+    else:
+        lines.append("No saved places are stored for this user.")
+
+    perms = profile.get("permissions", {})
+    if perms:
+        allowed = [p for p, allowed in perms.items() if allowed]
+        denied = [p for p, allowed in perms.items() if not allowed]
+        if allowed:
+            lines.append(f"Granted permissions: {', '.join(sorted(allowed))}.")
+        if denied:
+            lines.append(f"Restricted permissions: {', '.join(sorted(denied))}.")
+
+    lines.append("When referencing these facts, quote them exactly and avoid hallucinating.")
+    return "\n".join(lines)
+
+
+def chat_turn(history, user_text: str, identity: str, *, context: str | None = None):
     """
     Send one user message + the running history to Ollama and get assistant reply.
 
@@ -73,7 +118,10 @@ def chat_turn(history, user_text: str, identity: str):
     """
     # We append the new user message to a temporary copy
     # to send to ollama.chat.
-    messages = history + [{"role": "user", "content": user_text}]
+    messages = history[:]
+    if context:
+        messages.append({"role": "system", "content": context})
+    messages.append({"role": "user", "content": user_text})
 
     # Call local model through Ollama
     resp = ollama.chat(

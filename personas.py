@@ -10,7 +10,7 @@ PERSONAS = {
     "Aldridge": {
         "system": (
             "You are an on-device assistant talking to Aldridge. "
-            "Be concise, practical, and supportive."
+            "Be concise, practical, and supportive. "
         ),
         "style": (
             "Speak casually and informally. Use a little slang if it helps clarity, "
