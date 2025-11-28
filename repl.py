@@ -610,9 +610,9 @@ def run_repl():
             continue
 
         # calendar permission management (only Aldridge can change permissions)
-        if low.startswith("/grant_calendar "):
+        if low.startswith("/grant_google_access "):
             if identity != "Aldridge":
-                print("(Only Aldridge can grant calendar permissions.)")
+                print("(Only Aldridge can grant Google API permissions.)")
                 continue
             target = user.split(maxsplit=1)[1].strip()
             if target not in PERSONAS:
@@ -621,12 +621,12 @@ def run_repl():
             ensure_identity_struct(profiles, target)
             profiles[target]["permissions"]["calendar"] = True
             save_profiles(profiles)
-            print(f"(Calendar access granted to {target}.)")
+            print(f"(Google API access (Calendar & Contacts) granted to {target}.)")
             continue
 
-        if low.startswith("/revoke_calendar "):
+        if low.startswith("/revoke_google_access "):
             if identity != "Aldridge":
-                print("(Only Aldridge can revoke calendar permissions.)")
+                print("(Only Aldridge can revoke Google API permissions.)")
                 continue
             target = user.split(maxsplit=1)[1].strip()
             if target not in PERSONAS:
@@ -635,7 +635,7 @@ def run_repl():
             ensure_identity_struct(profiles, target)
             profiles[target]["permissions"]["calendar"] = False
             save_profiles(profiles)
-            print(f"(Calendar access revoked from {target}.)")
+            print(f"(Google API access (Calendar & Contacts) revoked from {target}.)")
             continue
 
         # ---------- Sensitive commands that require unlocked REAL identity ----------

@@ -132,7 +132,15 @@ Commands:
 
 /agenda
     - Read your next 10 upcoming calendar events. Only if this profile
-      has calendar permission.
+      has Google API permission.
+
+/grant_google_access <Name>
+    - Grant Google API access (Calendar & Contacts) to another persona.
+      Only Aldridge can grant permissions.
+
+/revoke_google_access <Name>
+    - Revoke Google API access (Calendar & Contacts) from another persona.
+      Only Aldridge can revoke permissions.
 
 /voice on | off | status
     - Turn voice/auto-listen mode on or off, or check status.

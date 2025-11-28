@@ -25,7 +25,7 @@ def ensure_identity_struct(profiles, identity):
     Make sure profiles[identity] exists with sane defaults:
     - places
     - tts settings
-    - permissions (calendar only auto-True for Aldridge)
+    - permissions (Google API access - Calendar & Contacts - auto-True for Aldridge)
     """
     profiles.setdefault(identity, {})
     profiles[identity].setdefault("places", {})
@@ -41,7 +41,9 @@ def ensure_identity_struct(profiles, identity):
 
 def has_calendar_permission(identity, profiles):
     """
-    Check if this identity is allowed to access calendar.
+    Check if this identity is allowed to access Google APIs (Calendar & Contacts).
+    Note: The permission key is named "calendar" for historical reasons, but it controls
+    access to both Google Calendar API and Google People API (Contacts).
     Guest should always return False unless explicitly changed (which we won't).
     """
     return profiles.get(identity, {}).get("permissions", {}).get("calendar", False)
