@@ -13,6 +13,8 @@ from config import (
     VOICE_MIN_LISTEN,
     HELP_TEXT,
     VOICE_THOUGHT_PADDING,
+    WAKE_WORD_MODE,
+    WAKE_WORDS,
 )
 
 from personas import PERSONAS
@@ -213,9 +215,37 @@ def _maybe_handle_calendar_query(user_text, identity, locked_like, profiles, *, 
     return handled
 
 
+def _enable_voice_mode():
+    """
+    Helper to enable voice mode based on WAKE_WORD_MODE setting.
+    When WAKE_WORD_MODE is enabled, start in active voice mode (already "woken up").
+    Returns (wake_word_mode, voice_mode) tuple.
+    """
+    if not stt.available:
+        return False, False
+    
+    if WAKE_WORD_MODE:
+        # Start in active voice mode (already "woken up")
+        print("(Voice mode active - speak naturally, say 'pause' to stop)")
+        return False, True
+    else:
+        print("(Voice mode active - speak naturally, say 'pause' to stop)")
+        return False, True
+
+
+def do_wake_word_listen():
+    """
+    Listen passively for wake word.
+    Returns True if wake word detected, False otherwise.
+    """
+    if not stt.available:
+        return False
+    return stt.detect_wake_word()
+
+
 def do_voice_listen(voice_mode_active):
     """
-    Listen for voice input through STT.
+    Listen for voice input through STT (active listening mode).
     Returns (transcribed_text or None, voice_mode_active_after).
     """
     if not stt.available:
@@ -233,7 +263,7 @@ def do_voice_listen(voice_mode_active):
     low_spoken = spoken.lower().strip()
     exit_phrases = ["exit", "quit", "goodbye", "bye", "stop", "pause"]
     if voice_mode_active and any(p in low_spoken for p in exit_phrases):
-        print("(Voice mode paused. Type to continue or /voice on to resume.)")
+        # Don't print message here - let main loop print context-aware message
         return None, False
 
     return spoken, voice_mode_active
@@ -321,16 +351,25 @@ def run_repl():
         if tts_enabled:
             tts.speak(greet, True, tts_voice_index, tts_rate)
 
-    # voice mode starts active only if:
-    # - unlocked identity
-    # - STT actually available
-    voice_mode = (
-        VOICE_MODE_DEFAULT
-        and stt.available
-        and identity != "LOCKED"
-    )
-    if voice_mode:
+    # Voice mode state machine:
+    # - wake_word_mode: passively listening for wake word (after "exit" when WAKE_WORD_MODE enabled)
+    # - voice_mode: actively listening for commands (default when WAKE_WORD_MODE enabled)
+    # - voice_mode = False, wake_word_mode = False: fully off (only /voice on can re-enable)
+    
+    # Initialize based on config and availability
+    # When WAKE_WORD_MODE is enabled, start in active voice mode (already "woken up")
+    # When WAKE_WORD_MODE is disabled, use old always-on behavior
+    if WAKE_WORD_MODE and VOICE_MODE_DEFAULT and stt.available and identity != "LOCKED":
+        wake_word_mode = False  # Start already "woken up"
+        voice_mode = True        # Start in active voice mode
         print("(Voice mode active - speak naturally, say 'pause' to stop)")
+    elif not WAKE_WORD_MODE and VOICE_MODE_DEFAULT and stt.available and identity != "LOCKED":
+        wake_word_mode = False
+        voice_mode = True
+        print("(Voice mode active - speak naturally, say 'pause' to stop)")
+    else:
+        wake_word_mode = False
+        voice_mode = False
 
     # --------------- MAIN LOOP ---------------
     while True:
@@ -342,11 +381,39 @@ def run_repl():
                 # either keep listening or voice_mode just went False
                 if not voice_mode:
                     # voice mode turned off by saying "pause" etc.
-                    # fall through to typed input next loop
+                    # If WAKE_WORD_MODE is enabled, return to wake word mode so user can say wake word
+                    # Otherwise, allow typing
+                    if WAKE_WORD_MODE and stt.available and identity != "LOCKED":
+                        wake_word_mode = True  # Return to wake word mode
+                        wake_words_str = ", ".join(WAKE_WORDS[:3])
+                        if len(WAKE_WORDS) > 3:
+                            wake_words_str += f" (or {len(WAKE_WORDS) - 3} more)"
+                        print(f"(Voice mode paused. Say '{wake_words_str}' to reactivate or type commands.)")
+                    else:
+                        wake_word_mode = False  # Fully off, allow typing
+                    # fall through to typed input next loop (don't immediately enter wake word detection)
                     pass
                 continue
             user = spoken
             low = user.lower()
+        elif wake_word_mode:
+            # In wake word mode - listen for wake word audio first, then allow typing
+            # This allows saying "wake" to reactivate voice mode
+            if do_wake_word_listen():
+                print("(Wake word detected! Listening...)")
+                wake_word_mode = False
+                voice_mode = True
+                # Continue to active listening on next iteration
+                continue
+            else:
+                # No wake word detected, allow typing
+                try:
+                    user = input(f"{identity}> ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    break
+                if not user:
+                    continue
+                low = user.lower()
         else:
             try:
                 user = input(f"{identity}> ").strip()
@@ -363,6 +430,16 @@ def run_repl():
         if low == "/help":
             print(HELP_TEXT)
             continue
+
+        # -------- Wake word reactivation (typed or spoken) --------
+        # Allow typing wake word to reactivate voice mode when in wake word mode or fully off
+        if not voice_mode and WAKE_WORD_MODE and stt.available and identity != "LOCKED":
+            if low in WAKE_WORDS:
+                # Reactivate voice mode (start "woken up")
+                wake_word_mode = False
+                voice_mode = True
+                print("(Wake word detected! Voice mode reactivated.)")
+                continue
 
         # ---------- AUTH / LOCK / LOGIN ----------
         if low == "/recognize":
@@ -426,9 +503,8 @@ def run_repl():
                 tts.speak(greet, True, tts_voice_index, tts_rate)
 
             # After successful recognition, turn on voice mode if allowed
-            if stt.available and VOICE_MODE_DEFAULT:
-                voice_mode = True
-                print("(Voice mode active - speak naturally, say 'pause' to stop)")
+            if VOICE_MODE_DEFAULT:
+                wake_word_mode, voice_mode = _enable_voice_mode()
             continue
 
         if low.startswith("/setup_profile"):
@@ -437,7 +513,7 @@ def run_repl():
             if not tentative:
                 print("Usage: /setup_profile <Name>")
                 continue
-            verified_name = prompt_for_verified_name(tentative, use_voice=voice_mode)
+            verified_name = prompt_for_verified_name(tentative, use_voice=(voice_mode or wake_word_mode))
             if not verified_name:
                 print("(Setup cancelled.)")
                 continue
@@ -474,9 +550,8 @@ def run_repl():
                 tts_rate = profiles[identity]["tts"]["rate"]
 
                 # allow voice mode in bypass too
-                if stt.available and VOICE_MODE_DEFAULT:
-                    voice_mode = True
-                    print("(Voice mode active - speak naturally, say 'pause' to stop)")
+                if VOICE_MODE_DEFAULT:
+                    wake_word_mode, voice_mode = _enable_voice_mode()
             else:
                 print(f"'{devname}' is not an allowed /login target.")
             continue
@@ -505,9 +580,8 @@ def run_repl():
                 print_header("guest")
                 print("Guest mode active. You can chat, but calendar and saved places are restricted.")
                 # voice mode for guest? we can allow STT but still no sensitive stuff
-                if stt.available and VOICE_MODE_DEFAULT:
-                    voice_mode = True
-                    print("(Voice mode active - speak naturally, say 'pause' to stop)")
+                if VOICE_MODE_DEFAULT:
+                    wake_word_mode, voice_mode = _enable_voice_mode()
             elif identity == "guest":
                 # guest cannot just /switch into Aldridge/Professor without auth
                 print("Guest cannot switch to a protected profile. Use /recognize or /login (dev).")
@@ -592,19 +666,31 @@ def run_repl():
             if arg == "on":
                 if not stt.available:
                     print("(STT unavailable. Install STT deps.)")
+                elif identity == "LOCKED":
+                    print("(Voice mode requires authentication. Use /recognize first.)")
                 else:
-                    voice_mode = True
-                    print("(Voice mode ON - speak naturally, say 'pause' to stop)")
+                    wake_word_mode, voice_mode = _enable_voice_mode()
             elif arg == "off":
                 voice_mode = False
+                wake_word_mode = False
                 print("(Voice mode OFF - type commands normally)")
             elif arg == "status":
-                status = "ON" if voice_mode else "OFF"
-                print(f"(Voice mode: {status})")
-                if voice_mode:
+                if wake_word_mode:
+                    status = "WAKE WORD MODE"
+                    wake_words_str = ", ".join(WAKE_WORDS[:3])
+                    if len(WAKE_WORDS) > 3:
+                        wake_words_str += f" (or {len(WAKE_WORDS) - 3} more)"
+                    print(f"(Voice mode: {status})")
+                    print(f"  - Wake words: {wake_words_str}")
+                elif voice_mode:
+                    status = "ACTIVE LISTENING"
+                    print(f"(Voice mode: {status})")
                     print(f"  - Phrase limit: {VOICE_PHRASE_LIMIT}s")
                     print(f"  - End silence: {VOICE_END_SILENCE}s (+{VOICE_THOUGHT_PADDING}s thought padding)")
                     print(f"  - Min listen: {VOICE_MIN_LISTEN}s")
+                else:
+                    status = "OFF"
+                    print(f"(Voice mode: {status})")
             else:
                 print("Usage: /voice on|off|status")
             continue

@@ -13,6 +13,10 @@ from config import (
     VOICE_PHRASE_LIMIT,
     STT_BACKEND,
     VOICE_THOUGHT_PADDING,
+    WAKE_WORDS,
+    WAKE_WORD_PHRASE_LIMIT,
+    WAKE_WORD_END_SILENCE,
+    WAKE_WORD_MIN_LISTEN,
 )
 
 
@@ -169,7 +173,8 @@ class STT:
         phrase_time_limit=VOICE_PHRASE_LIMIT,
         samplerate=16000,
         blocksize=8000,
-        allow_wake_prefix=False
+        allow_wake_prefix=False,
+        quiet=False
     ):
         """
         Record one utterance, return the recognized text (string),
@@ -200,7 +205,8 @@ class STT:
                     callback=_cb
                 ):
                     rec = vosk.KaldiRecognizer(model, samplerate)
-                    print("(Listening… speak now)")
+                    if not quiet:
+                        print("(Listening… speak now)")
                     start_t = _time.time()
                     last_voice_t = start_t
                     heard_anything = False
@@ -262,7 +268,8 @@ class STT:
                 r.phrase_threshold = max(0.1, VOICE_MIN_LISTEN)
                 with sr.Microphone() as source:
                     r.adjust_for_ambient_noise(source, duration=0.5)
-                    print("(Listening… speak now)")
+                    if not quiet:
+                        print("(Listening… speak now)")
                     audio = r.listen(
                         source,
                         timeout=None,
@@ -289,6 +296,46 @@ class STT:
 
         print("(STT unavailable: install SpeechRecognition + PyAudio, or set VOSK_MODEL and install vosk + sounddevice.)")
         return None
+
+    def detect_wake_word(self, quiet=True):
+        """
+        Wake word detection using full STT (not true keyword spotting).
+        Listens for a short phrase and checks if it contains any wake word.
+        Returns True if wake word detected, False otherwise.
+        
+        Note: This still uses full STT transcription, just with shorter timeouts.
+        For true CPU savings, would need dedicated keyword spotting (KWS) model.
+        Current benefit: shorter listens (3s vs 15s) = less processing of long utterances.
+        
+        Args:
+            quiet: If True, suppress "Listening..." messages (default: True)
+        """
+        if not self.available or not WAKE_WORDS:
+            return False
+
+        # Use shorter timeouts for wake word detection (3s max vs 15s for full mode)
+        # This reduces CPU by limiting how long we process audio, but still does full STT
+        text = self.listen_once(
+            end_silence=WAKE_WORD_END_SILENCE,
+            min_listen=WAKE_WORD_MIN_LISTEN,
+            phrase_time_limit=WAKE_WORD_PHRASE_LIMIT,
+            allow_wake_prefix=False,
+            quiet=quiet
+        )
+
+        if not text:
+            return False
+
+        # Normalize and check for wake words
+        text_lower = text.lower().strip()
+        
+        # Check if any wake word appears in the transcribed text
+        # This handles cases like "hey xai" or "xai what's the weather"
+        for wake_word in WAKE_WORDS:
+            if wake_word in text_lower:
+                return True
+
+        return False
 
 
 # create singletons that repl.py can import

@@ -49,6 +49,23 @@ VOICE_END_SILENCE = float(os.getenv("VOICE_END_SILENCE", "2.0"))# silence that e
 VOICE_MIN_LISTEN = float(os.getenv("VOICE_MIN_LISTEN", "0.8"))  # always listen at least this long
 VOICE_THOUGHT_PADDING = float(os.getenv("VOICE_THOUGHT_PADDING", "1.2"))  # extra pause cushion before auto-stop
 
+# -------- Wake word configuration --------
+# Wake word mode: passively listen for wake word, then activate full voice mode
+# Set to "1" to enable wake word mode, "0" for always-on voice mode (default)
+WAKE_WORD_MODE = os.getenv("WAKE_WORD_MODE", "0") == "1"
+
+# Wake word options:
+# Default: "wake" - simple, clear, and STT-friendly
+# You can customize by setting WAKE_WORD env var to comma-separated list
+# Example: WAKE_WORD="wake,wake up" for multiple variations
+WAKE_WORD_ENV = os.getenv("WAKE_WORD", "wake")
+WAKE_WORDS = [w.strip().lower() for w in WAKE_WORD_ENV.split(",") if w.strip()]
+
+# Wake word detection settings
+WAKE_WORD_PHRASE_LIMIT = int(os.getenv("WAKE_WORD_PHRASE_LIMIT", "3"))  # max seconds for wake word detection (shorter = faster)
+WAKE_WORD_END_SILENCE = float(os.getenv("WAKE_WORD_END_SILENCE", "1.0"))  # silence threshold for wake word (shorter = faster)
+WAKE_WORD_MIN_LISTEN = float(os.getenv("WAKE_WORD_MIN_LISTEN", "0.3"))  # minimum listen time for wake word
+
 # -------- STT backend selection --------
 # STT_BACKEND:
 #   "auto" = automatic (use Vosk if available, else Google)
@@ -136,6 +153,10 @@ Commands:
 
 /voice on | off | status
     - Turn voice/auto-listen mode on or off, or check status.
+    - When wake word mode is enabled, /voice on activates wake word detection.
+    - Say wake word (e.g., "xai" or "buta") to activate full voice mode.
+    - Say "pause", "stop", or "exit" to return to wake word mode.
+    - Use /voice off to fully disable voice features.
 
 /tts on | off
     - Enable or disable text-to-speech playback of the assistant responses.
